@@ -6,7 +6,6 @@
 1.支持yaml编写
 2.pytest + requests
 3.httprunner 原生
----
 
 ## 项目结构
 
