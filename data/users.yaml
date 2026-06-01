@@ -1,0 +1,14 @@
+# 测试数据 - 用户相关
+admin:
+  username: admin
+  password: Admin@123
+  role: admin
+
+normal_user:
+  username: test_user
+  password: Test@123
+  role: user
+
+invalid_user:
+  username: not_exist
+  password: wrong_pass

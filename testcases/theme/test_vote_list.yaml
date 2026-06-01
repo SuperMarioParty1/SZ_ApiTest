@@ -1,0 +1,44 @@
+config:
+  name: 主题投票列表接口
+  base_url: ${ENV(BASE_URL_DEV)}
+  variables:
+    UUID1: 'sssssfhhh'
+    version: "1.0.0"
+    super_token: x8eec9c967b71c6cb98b295179ec14c2cx
+
+teststeps:
+  - name: 获取主题投票列表
+    request:
+      method: GET
+      url: /theme/vote-list
+      params:
+        app: hzm
+        channel: AppStore
+        device: "iPhone12,5"
+        lang: en_CN
+        page: 1
+        platform: ios
+        sysversion: "15.1"
+        timestamp: ${get_timestamp()}
+        uuid: $UUID1
+        version: $version
+        vip: 1
+        tk: $super_token
+        cat: 0
+        currency: HKD
+        cache_key_on: 0
+      validate:
+        - eq: [status_code, 200]
+        - eq: [content.status, 0]           # 业务状态码
+        - type: [content.data, array]       # 确保data是数组
+        - len_eq: [content.data, 8]         # 数组长度必须是8
+
+        # 逐个断言 data 里的每一项 name
+        - eq: [content.data.0.name, "ACGN"]
+        - eq: [content.data.1.name, "Game"]
+        - eq: [content.data.2.name, "Hip Hop"]
+        - eq: [content.data.3.name, "Mad"]
+        - eq: [content.data.4.name, "Motivation"]
+        - eq: [content.data.5.name, "Car"]
+        - eq: [content.data.6.name, "Cyberpunk"]
+        - eq: [content.data.7.name, "Heal"]
