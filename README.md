@@ -5,5 +5,5 @@
 编写模式支持
 1.支持yaml编写
 2.pytest + requests
-3.httprunner 原生**
+3.httprunner 原生
 
