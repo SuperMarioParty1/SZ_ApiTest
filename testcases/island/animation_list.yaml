@@ -1,0 +1,57 @@
+config:
+  name: 动画岛列表接口
+  base_url: ${ENV(BASE_URL_DEV)}
+  variables:
+    UUID1: 'sssssfhhh'
+    version: "3.2.1"
+    super_token: ${ENV(SUPER_TOKEN)}
+
+teststeps:
+  - name: 获取动画岛下发列表
+    request:
+      method: GET
+      url: /island/animation-list
+      params:
+        tk: $super_token
+        lang: zh_CN
+        isDynamic: 1
+        ui_test: 1
+        page: 1
+        sysversion: 1.0.2
+        app: hzm
+        device: huawei
+        vip: 0
+        version: 3.2.1
+        platform: ios
+        currency: HKD
+        cache_key_on: 0
+    validate:
+      - eq: [status_code, 200]
+      - eq: [content.code, 0]
+      - eq: [content.msg, "成功"]
+      - len_eq: [content.data.list, 24]
+
+      - eq: ["content.data.list[0].name", "狗狗"]
+      - eq: ["content.data.list[1].name", "猫"]
+      - eq: ["content.data.list[2].name", "爱心碰撞"]
+      - eq: ["content.data.list[3].name", "地下城堡4"]
+      - eq: ["content.data.list[4].name", "梦幻蝴蝶"]
+      - eq: ["content.data.list[5].name", "柯基骑滑板车"]
+      - eq: ["content.data.list[6].name", "马阿呆-马到成功"]
+      - eq: ["content.data.list[7].name", "马上有钱"]
+      - eq: ["content.data.list[8].name", "黑猫探月"]
+      - eq: ["content.data.list[9].name", "【DIY】亚克力吊坠"]
+      - eq: ["content.data.list[10].name", "赛车跑马灯"]
+      - eq: ["content.data.list[11].name", "懵懵兔秋千"]
+      - eq: ["content.data.list[12].name", "【DIY】水晶小卡"]
+      - eq: ["content.data.list[13].name", "柯基爬杆"]
+      - eq: ["content.data.list[14].name", "升降篮"]
+      - eq: ["content.data.list[15].name", "【DIY】黑胶唱片"]
+      - eq: ["content.data.list[16].name", "屁屁薯春天"]
+      - eq: ["content.data.list[17].name", "two兔"]
+      - eq: ["content.data.list[18].name", "荔枝猫猫虫"]
+      - eq: ["content.data.list[19].name", "写轮眼"]
+      - eq: ["content.data.list[20].name", "柴犬健身"]
+      - eq: ["content.data.list[21].name", "堆堆爱心"]
+      - eq: ["content.data.list[22].name", "熊猫树枝"]
+      - eq: ["content.data.list[23].name", "非主流猫b"]

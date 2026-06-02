@@ -30,15 +30,14 @@ teststeps:
       validate:
         - eq: [status_code, 200]
         - eq: [content.status, 0]           # 业务状态码
-        - type: [content.data, array]       # 确保data是数组
-        - len_eq: [content.data, 8]         # 数组长度必须是8
+        - len_eq: [content.data, 8]         # 数组长度8，隐含了类型是数组
 
         # 逐个断言 data 里的每一项 name
-        - eq: [content.data.0.name, "ACGN"]
-        - eq: [content.data.1.name, "Game"]
-        - eq: [content.data.2.name, "Hip Hop"]
-        - eq: [content.data.3.name, "Mad"]
-        - eq: [content.data.4.name, "Motivation"]
-        - eq: [content.data.5.name, "Car"]
-        - eq: [content.data.6.name, "Cyberpunk"]
-        - eq: [content.data.7.name, "Heal"]
+        - eq: ["content.data[0].name", "ACGN"]
+        - eq: ["content.data[1].name", "Game"]
+        - eq: ["content.data[2].name", "Hip Hop"]
+        - eq: ["content.data[3].name", "Mad"]
+        - eq: ["content.data[4].name", "Motivation"]
+        - eq: ["content.data[5].name", "Car"]
+        - eq: ["content.data[6].name", "Cyberpunk"]
+        - eq: ["content.data[7].name", "Heal"]

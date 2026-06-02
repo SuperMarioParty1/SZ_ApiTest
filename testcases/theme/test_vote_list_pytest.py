@@ -3,8 +3,9 @@
 import time
 import pytest
 import requests
+from utils.env_loader import ENV_CONFIG
 
-BASE_URL = "http://test.kuso.xyz:2102"
+BASE_URL = ENV_CONFIG["base_url"]
 
 PARAMS = {
     "app": "hzm",
@@ -17,7 +18,7 @@ PARAMS = {
     "uuid": "sssssfhhh",
     "version": "1.0.0",
     "vip": 1,
-    "tk": "x8eec9c967b71c6cb98b295179ec14c2cx",
+    "tk": ENV_CONFIG["super_token"],
     "cat": 0,
     "currency": "HKD",
     "cache_key_on": 0,

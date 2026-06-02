@@ -42,11 +42,28 @@ def open_report(path: Path):
 # yaml 用例：hrun + 自定义报告
 # ──────────────────────────────────────────────
 
+def clean_generated_files(test_path: Path):
+    """运行前删除 httprunner 自动生成的 _test.py，确保每次从 yaml 重新生成"""
+    test_path = test_path.resolve()
+    if test_path.is_file():
+        targets = [test_path.parent / (test_path.stem + "_test.py")]
+    else:
+        targets = list(test_path.rglob("*_test.py"))
+
+    for f in targets:
+        if f.exists():
+            f.unlink()
+            print(f"🗑  已删除旧缓存: {f.relative_to(PROJECT_ROOT.resolve())}")
+
+
 def run_yaml(test_path: str):
     from utils.report_generator import generate_report
 
     REPORTS_DIR.mkdir(exist_ok=True)
     yaml_path = Path(test_path)
+
+    # 每次运行前清理旧的生成文件，避免缓存干扰
+    clean_generated_files(yaml_path)
 
     logs_before = get_existing_logs()
 
