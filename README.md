@@ -11,10 +11,6 @@
 
 ```
 SZ_Project/
-├── config/                     # 多环境配置
-│   ├── dev.env.yaml
-│   ├── test.env.yaml
-│   └── prod.env.yaml
 ├── data/                       # 测试数据（yaml 格式）
 │   └── users.yaml
 ├── hooks/                      # httprunner 钩子函数
@@ -34,7 +30,7 @@ SZ_Project/
 │   └── yaml_loader.py          # yaml 用例加载
 ├── reports/                    # 测试报告输出目录
 ├── logs/                       # 日志输出目录
-├── .env.example                # 环境变量示例
+├── .env                        # 环境变量配置
 ├── pytest.ini                  # pytest 配置
 └── requirements.txt            # 依赖清单
 ```

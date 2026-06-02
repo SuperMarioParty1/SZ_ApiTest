@@ -1,6 +1,6 @@
 """
 环境配置加载工具
-根据 ENV 环境变量自动加载对应的 yaml 配置文件
+统一从项目根目录的 .env 文件读取配置，不再依赖 config/*.env.yaml
 """
 import os
 import yaml
@@ -12,26 +12,6 @@ from loguru import logger
 load_dotenv()
 
 PROJECT_ROOT = Path(__file__).parent.parent
-
-
-def load_env_config(env: str = None) -> dict:
-    """
-    加载指定环境的配置文件
-
-    :param env: 环境名称，默认读取 ENV 环境变量，fallback 为 dev
-    :return: 配置字典
-    """
-    env = env or os.getenv("ENV", "dev")
-    config_path = PROJECT_ROOT / "config" / f"{env}.env.yaml"
-
-    if not config_path.exists():
-        raise FileNotFoundError(f"环境配置文件不存在: {config_path}")
-
-    with open(config_path, encoding="utf-8") as f:
-        config = yaml.safe_load(f)
-
-    logger.info(f"已加载环境配置: {env} -> {config_path}")
-    return config
 
 
 def load_test_data(filename: str) -> dict:
@@ -49,5 +29,18 @@ def load_test_data(filename: str) -> dict:
         return yaml.safe_load(f)
 
 
-# 全局配置单例
-ENV_CONFIG = load_env_config()
+def _require(key: str) -> str:
+    """读取必填环境变量，缺失时报错提示"""
+    value = os.getenv(key)
+    if value is None:
+        raise EnvironmentError(f"缺少环境变量: {key}，请检查项目根目录的 .env 文件")
+    return value
+
+
+# 全局配置单例，直接从 .env 读取
+ENV_CONFIG = {
+    "base_url": _require("BASE_URL_DEV"),
+    "super_token": _require("SUPER_TOKEN"),
+}
+
+logger.info(f"已加载环境配置，base_url={ENV_CONFIG['base_url']}")

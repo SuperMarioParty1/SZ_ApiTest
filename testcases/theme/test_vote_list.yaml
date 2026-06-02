@@ -4,7 +4,7 @@ config:
   variables:
     UUID1: 'sssssfhhh'
     version: "1.0.0"
-    super_token: x8eec9c967b71c6cb98b295179ec14c2cx
+    super_token: ${ENV(SUPER_TOKEN)}
 
 teststeps:
   - name: 获取主题投票列表
