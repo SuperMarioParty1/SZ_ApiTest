@@ -52,26 +52,6 @@ cp .env.example .env
 # 编辑 .env，填写真实的 BASE_URL 等信息
 ```
 
-### 3. 运行测试
-
-```bash
-# 运行全部用例
-pytest
-
-# 运行指定模块
-pytest testcases/user/login/
-
-# 指定环境运行
-ENV=test pytest
-
-# 生成 HTML 报告
-pytest --html=reports/report.html --self-contained-html
-
-# 生成 Allure 报告
-pytest --alluredir=allure-results
-allure serve allure-results
-```
-
 ---
 
 ## YAML 用例规范
@@ -131,11 +111,11 @@ json:
 
 
 ## 运行命令
-# 运行单个用例
-python run.py --path testcases/theme/test_vote_list.yaml
+# 运行单个用例(运行后会自动生成web报告并打开)
+python3 run.py --path testcases/theme/test_vote_list.yaml
 
-# 运行整个目录
-python run.py --path testcases/theme
+# 运行整个目录(运行后会自动生成web报告并打开)
+python3 run.py --path testcases/theme
 
 
 ## 编写模式支持
