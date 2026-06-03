@@ -265,11 +265,14 @@ class LogParser:
         name_m = re.search(r"Start to run testcase:\s*(.+?),\s*TestCase ID:", content)
         if name_m:
             case_name = name_m.group(1).strip()
-        else:
-            # 没有 testcase 头信息时，从第一个 step name 推断
-            step_m = re.search(r"run step begin:\s*(.+?)\s*>>>>>>", content)
-            if step_m:
-                case_name = step_m.group(1).strip()
+        elif yaml_path and yaml_path.exists():
+            # 没有 testcase 头信息时（httprunner 参数化末尾日志），从 yaml config.name 读取
+            try:
+                with open(yaml_path, encoding="utf-8") as f:
+                    yaml_data = yaml.safe_load(f)
+                case_name = yaml_data.get("config", {}).get("name", log_path.stem)
+            except Exception:
+                pass
 
         # 如果 case 名含有未替换的变量（如 $lang），从 params 里提取实际值补充到名字里
         if '$' in case_name:

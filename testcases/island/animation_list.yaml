@@ -1,5 +1,5 @@
 config:
-  name: 动画岛列表接口 - 多语言
+  name: 动画岛列表接口
   base_url: ${ENV(BASE_URL_2102)}
   variables:
     UUID1: 'sssssfhhh'
