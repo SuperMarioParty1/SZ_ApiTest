@@ -3,9 +3,9 @@
 import time
 import pytest
 import requests
-from utils.env_loader import ENV_CONFIG
+from utils.env_loader import ENV_CONFIG, get_base_url
 
-BASE_URL = ENV_CONFIG["base_url"]
+BASE_URL = get_base_url(2102)
 
 PARAMS = {
     "app": "hzm",

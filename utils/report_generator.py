@@ -260,10 +260,27 @@ class LogParser:
         if m:
             start_time = m.group(1)
 
+        # 从日志里提取 testcase 名，格式：Start to run testcase: <name>, TestCase ID: <uuid>
+        case_name = log_path.stem  # 默认用文件名
+        name_m = re.search(r"Start to run testcase:\s*(.+?),\s*TestCase ID:", content)
+        if name_m:
+            case_name = name_m.group(1).strip()
+        else:
+            # 没有 testcase 头信息时，从第一个 step name 推断
+            step_m = re.search(r"run step begin:\s*(.+?)\s*>>>>>>", content)
+            if step_m:
+                case_name = step_m.group(1).strip()
+
+        # 如果 case 名含有未替换的变量（如 $lang），从 params 里提取实际值补充到名字里
+        if '$' in case_name:
+            lang_m = re.search(r'"lang":\s*"([^"]+)"', content)
+            if lang_m:
+                case_name = case_name.replace('$lang', lang_m.group(1))
+
         yaml_asserts = self._loader.load(yaml_path) if yaml_path else []
 
         case = CaseResult(
-            name=log_path.stem,
+            name=case_name,
             log_file=log_path.name,
             start_time=start_time,
             yaml_file=yaml_path.name if yaml_path else "",
@@ -336,6 +353,11 @@ class LogParser:
 
         # 断言
         step.asserts = self._build_asserts(block, yaml_asserts, step.status_code, step.response_body)
+
+        # 步骤名里的 $变量 用 params 实际值替换
+        if step.params and '$' in step.name:
+            for k, v in step.params.items():
+                step.name = step.name.replace(f'${k}', str(v))
 
         # 错误
         errors = [l for l in block.splitlines() if "| ERROR |" in l]

@@ -1,19 +1,22 @@
 config:
-  name: 动画岛列表接口
-  base_url: ${ENV(BASE_URL_DEV)}
+  name: 动画岛列表接口 - 多语言
+  base_url: ${ENV(BASE_URL_2102)}
   variables:
     UUID1: 'sssssfhhh'
     version: "3.2.1"
     super_token: ${ENV(SUPER_TOKEN)}
+    lang: zh_CN
+  parameters:
+    lang: ["zh_CN", "zh-Hant_CN", "en_CN", "ja_CN", "es_CN"]
 
 teststeps:
-  - name: 获取动画岛下发列表
+  - name: 获取动画岛下发列表 - $lang
     request:
       method: GET
       url: /island/animation-list
       params:
         tk: $super_token
-        lang: zh_CN
+        lang: $lang
         isDynamic: 1
         ui_test: 1
         page: 1

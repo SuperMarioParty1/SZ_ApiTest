@@ -79,6 +79,30 @@ class _CustomReportPlugin:
         parts = nodeid.split("::")
         class_name = parts[-2] if len(parts) >= 3 else parts[0]
         func_name = parts[-1] if parts else nodeid
+        # pytest 对非 ASCII 参数做了 unicode 转义，还原成可读中文
+        try:
+            func_name = func_name.encode('raw_unicode_escape').decode('unicode_escape')
+        except Exception:
+            pass
+
+        # 如果函数名带有 [param] 且 class 是参数化的 fixture，把参数提取出来作为分组 key
+        # 例如：test_list_item_name[zh_CN-0-狗狗] -> class_name = "TestAnimationListMultiLang[zh_CN]"
+        #        test_status_code[zh-Hant_CN]      -> class_name = "TestAnimationListMultiLang[zh-Hant_CN]"
+        import re
+        fixture_param_match = re.search(r'^[^[]+\[([^\]]+)\]', func_name)
+        if fixture_param_match and 'MultiLang' in class_name:
+            param_str = fixture_param_match.group(1)
+            # 从已知的 lang code 列表里精确匹配前缀，避免 zh-Hant_CN 被误切
+            known_langs = ["zh-Hant_CN", "zh_CN", "en_CN", "ja_CN", "es_CN"]
+            matched_lang = next((lang for lang in known_langs if param_str == lang or param_str.startswith(lang + "-")), None)
+            if matched_lang:
+                class_name = f"{class_name}[{matched_lang}]"
+                # 去掉 func_name 里的 fixture 参数部分，保留后面的 parametrize 参数
+                func_name = re.sub(
+                    r'^([^[]+)\[' + re.escape(matched_lang) + r'-?([^\]]*)\](.*)$',
+                    lambda m: m.group(1) + (f"[{m.group(2)}]" if m.group(2) else "") + m.group(3),
+                    func_name
+                )
 
         # 构建断言列表
         asserts = []
@@ -145,7 +169,9 @@ class _CustomReportPlugin:
 
 @pytest.fixture(scope="session")
 def base_url() -> str:
-    return ENV_CONFIG["base_url"]
+    # 默认读 2102，需要其他端口时在具体用例里覆盖或直接调用 get_base_url(port)
+    from utils.env_loader import get_base_url
+    return get_base_url(2102)
 
 
 @pytest.fixture(scope="session")

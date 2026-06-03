@@ -4,9 +4,9 @@ import time
 import pytest
 import requests
 
-from utils.env_loader import ENV_CONFIG
+from utils.env_loader import ENV_CONFIG, get_base_url
 
-BASE_URL = ENV_CONFIG["base_url"]
+BASE_URL = get_base_url(2102)
 
 PARAMS = {
     "tk": ENV_CONFIG["super_token"],
@@ -61,66 +61,84 @@ def animation_list_response():
     return resp
 
 
-class TestAnimationList:
-    """动画岛列表接口测试"""
+# ──────────────────────────────────────────────
+# 多语言测试：切换 lang 参数，验证接口基础可用性
+# ──────────────────────────────────────────────
 
-    def _base_record(self, record_request, response, check_item, assert_method, expect_value, actual_value):
-        """统一上报请求数据到报告"""
+LANGUAGES = [
+    ("zh_CN",       "简体中文"),
+    ("zh-Hant_CN",  "繁体中文"),
+    ("en_CN",       "英语"),
+    ("ja_CN",       "日语"),
+    ("es_CN",       "西班牙语"),
+]
+
+
+@pytest.fixture(params=LANGUAGES, ids=[lang for lang, _ in LANGUAGES], scope="module")
+def lang_response(request):
+    """每种语言单独发一次请求，fixture 自动参数化"""
+    lang_code, lang_name = request.param
+    params = {**PARAMS, "lang": lang_code, "timestamp": int(time.time())}
+    resp = requests.get(f"{BASE_URL}/island/animation-list", params=params)
+    # 把语言信息挂在响应上，方便测试函数取用
+    resp._lang_code = lang_code
+    resp._lang_name = lang_name
+    return resp
+
+
+class TestAnimationListMultiLang:
+    """动画岛列表接口 - 多语言切换测试"""
+
+    def _record(self, record_request, resp, check_item, assert_method, expect, actual):
         record_request({
-            "url": f"{BASE_URL}/island/animation-list",
+            "url": resp.url,
             "method": "GET",
-            "params": {**PARAMS, "timestamp": "动态生成"},
-            "request_headers": dict(response.request.headers),
-            "status_code": response.status_code,
-            "response_body": response.text,
+            "params": {**PARAMS, "lang": resp._lang_code, "timestamp": "动态生成"},
+            "request_headers": dict(resp.request.headers),
+            "status_code": resp.status_code,
+            "response_body": resp.text,
             "asserts": [{
                 "check_item": check_item,
                 "assert_method": assert_method,
-                "expect_value": expect_value,
-                "actual_value": actual_value,
+                "expect_value": expect,
+                "actual_value": actual,
             }],
         })
 
-    def test_status_code(self, animation_list_response, record_request):
-        """HTTP 状态码应为 200"""
-        actual = animation_list_response.status_code
-        self._base_record(record_request, animation_list_response,
-                          "status_code", "==", 200, actual)
-        assert actual == 200
+    def test_status_code(self, lang_response, record_request):
+        """各语言 HTTP 状态码应为 200"""
+        actual = lang_response.status_code
+        self._record(record_request, lang_response, "status_code", "==", 200, actual)
+        assert actual == 200, f"[{lang_response._lang_name}] 状态码异常: {actual}"
 
-    def test_business_code(self, animation_list_response, record_request):
-        """业务 code 应为 0"""
-        body = animation_list_response.json()
+    def test_business_code(self, lang_response, record_request):
+        """各语言业务 code 应为 0"""
+        body = lang_response.json()
         actual = body["code"]
-        self._base_record(record_request, animation_list_response,
-                          "content.code", "==", 0, actual)
-        assert actual == 0, f"业务码异常: {body.get('msg')}"
+        self._record(record_request, lang_response, "content.code", "==", 0, actual)
+        assert actual == 0, f"[{lang_response._lang_name}] 业务码异常: {body.get('msg')}"
 
-    def test_msg_success(self, animation_list_response, record_request):
-        """msg 应为 成功"""
-        body = animation_list_response.json()
-        actual = body["msg"]
-        self._base_record(record_request, animation_list_response,
-                          "content.msg", "==", "成功", actual)
-        assert actual == "成功"
+    def test_list_not_empty(self, lang_response, record_request):
+        """各语言 data.list 不为空"""
+        body = lang_response.json()
+        actual = len(body["data"]["list"])
+        self._record(record_request, lang_response, "content.data.list", "len > 0", actual, actual)
+        assert actual > 0, f"[{lang_response._lang_name}] 列表为空"
 
-    def test_list_length(self, animation_list_response, record_request):
-        """data.list 长度应为 24"""
-        body = animation_list_response.json()
-        data_list = body["data"]["list"]
-        actual = len(data_list)
-        self._base_record(record_request, animation_list_response,
-                          "content.data.list", "len ==", 24, actual)
-        assert actual == 24, f"列表长度期望 24，实际 {actual}"
+    def test_list_length(self, lang_response, record_request):
+        """各语言 data.list 长度应为 24"""
+        body = lang_response.json()
+        actual = len(body["data"]["list"])
+        self._record(record_request, lang_response, "content.data.list", "len ==", 24, actual)
+        assert actual == 24, f"[{lang_response._lang_name}] 列表长度期望 24，实际 {actual}"
 
     @pytest.mark.parametrize("index, expected_name", enumerate(EXPECTED_NAMES))
-    def test_list_item_name(self, animation_list_response, record_request, index, expected_name):
-        """逐项校验 list 中每个 name"""
-        body = animation_list_response.json()
-        data_list = body["data"]["list"]
-        actual_name = data_list[index]["name"]
-        self._base_record(record_request, animation_list_response,
-                          f"content.data.list[{index}].name", "==", expected_name, actual_name)
+    def test_list_item_name(self, lang_response, record_request, index, expected_name):
+        """各语言逐项校验 list 中每个 name"""
+        body = lang_response.json()
+        actual_name = body["data"]["list"][index]["name"]
+        self._record(record_request, lang_response,
+                     f"content.data.list[{index}].name", "==", expected_name, actual_name)
         assert actual_name == expected_name, (
-            f"list[{index}].name 期望: {expected_name}，实际: {actual_name}"
+            f"[{lang_response._lang_name}] list[{index}].name 期望: {expected_name}，实际: {actual_name}"
         )

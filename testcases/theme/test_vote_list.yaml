@@ -1,6 +1,6 @@
 config:
   name: 主题投票列表接口
-  base_url: ${ENV(BASE_URL_DEV)}
+  base_url: ${ENV(BASE_URL_2102)}
   variables:
     UUID1: 'sssssfhhh'
     version: "1.0.0"

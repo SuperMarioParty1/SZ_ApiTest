@@ -1,6 +1,16 @@
 """
 环境配置加载工具
-统一从项目根目录的 .env 文件读取配置，不再依赖 config/*.env.yaml
+统一从项目根目录的 .env 文件读取配置
+
+.env 约定：
+  BASE_URL_2102=http://test.kuso.xyz:2102
+  BASE_URL_2106=http://test.kuso.xyz:2106
+  ...
+  SUPER_TOKEN=xxxxx
+
+用例中按端口获取 base_url：
+  from utils.env_loader import get_base_url, ENV_CONFIG
+  base_url = get_base_url(2102)
 """
 import os
 import yaml
@@ -12,6 +22,27 @@ from loguru import logger
 load_dotenv()
 
 PROJECT_ROOT = Path(__file__).parent.parent
+
+
+def get_env(key: str) -> str:
+    """读取环境变量，缺失时报错提示"""
+    value = os.getenv(key)
+    if value is None:
+        raise EnvironmentError(f"缺少环境变量: {key}，请检查项目根目录的 .env 文件")
+    return value
+
+
+def get_base_url(port: int | str) -> str:
+    """
+    按端口获取 base_url
+
+    用法：
+        get_base_url(2102)  ->  读取 .env 中的 BASE_URL_2102
+    """
+    key = f"BASE_URL_{port}"
+    url = get_env(key)
+    logger.debug(f"base_url({port}) = {url}")
+    return url
 
 
 def load_test_data(filename: str) -> dict:
@@ -29,18 +60,9 @@ def load_test_data(filename: str) -> dict:
         return yaml.safe_load(f)
 
 
-def _require(key: str) -> str:
-    """读取必填环境变量，缺失时报错提示"""
-    value = os.getenv(key)
-    if value is None:
-        raise EnvironmentError(f"缺少环境变量: {key}，请检查项目根目录的 .env 文件")
-    return value
-
-
-# 全局配置单例，直接从 .env 读取
+# 全局配置：只包含不依赖端口的公共配置
 ENV_CONFIG = {
-    "base_url": _require("BASE_URL_DEV"),
-    "super_token": _require("SUPER_TOKEN"),
+    "super_token": get_env("SUPER_TOKEN"),
 }
 
-logger.info(f"已加载环境配置，base_url={ENV_CONFIG['base_url']}")
+logger.info("环境配置已加载")
