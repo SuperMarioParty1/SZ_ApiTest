@@ -323,9 +323,10 @@ class LogParser:
         # 第二段 request details（requests 实际发送，含完整 URL 和请求头）
         sec2 = self._get_section(block, r"={18} request details ={18}")
         if sec2:
-            m = re.search(r"^url\s+:\s*(.+)$", sec2, re.MULTILINE)
+            m = re.search(r"^url\s+:\s*(.+?)(?=\n\w|\Z)", sec2, re.MULTILINE | re.DOTALL)
             if m:
-                step.full_url = m.group(1).strip()
+                # 去掉换行和多余空格，拼成完整 URL
+                step.full_url = re.sub(r'\s+', '', m.group(1))
             hj = self._get_json_value(sec2, "headers")
             if hj:
                 try:
@@ -535,7 +536,7 @@ class HtmlReportRenderer:
         <div class="step-body">
           <div class="url-bar">
             <span class="url-label">URL</span>
-            <span class="url-value">{step.url}</span>
+            <span class="url-value">{step.full_url or step.url}</span>
             <span class="status-code {sc_cls}">{step.status_code or '-'}</span>
           </div>
           {asserts_html}
