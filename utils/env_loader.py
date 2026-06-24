@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 环境配置加载工具
 统一从项目根目录的 .env 文件读取配置

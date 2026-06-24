@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 自定义 HTML 报告生成器
 解析 httprunner 运行日志 + yaml 用例文件，生成包含断言实际值/期望值对比的 HTML 报告
@@ -11,10 +13,12 @@
 """
 import json
 import re
+import shutil
 import yaml
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 try:
     import jmespath
@@ -26,6 +30,10 @@ PROJECT_ROOT = Path(__file__).parent.parent
 LOGS_DIR = PROJECT_ROOT / "logs"
 REPORTS_DIR = PROJECT_ROOT / "reports"
 TESTCASES_DIR = PROJECT_ROOT / "testcases"
+LATEST_REPORT_NAME = "report_latest.html"
+LATEST_REPORT_CSS_NAME = "report.css"
+PYTEST_CASES_JSON_NAME = "pytest_cases.json"
+SENSITIVE_KEYS = {"tk", "token", "super_token", "authorization", "access_token", "refresh_token"}
 
 
 # ──────────────────────────────────────────────
@@ -77,6 +85,31 @@ class CaseResult:
     @property
     def passed_steps(self):
         return sum(1 for s in self.steps if s.passed)
+
+
+def dump_case_results(cases: list[CaseResult], output_path: Path):
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(
+        json.dumps([asdict(case) for case in cases], ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def load_case_results(input_path: Path) -> list[CaseResult]:
+    if not input_path.exists():
+        return []
+
+    raw_cases = json.loads(input_path.read_text(encoding="utf-8"))
+    cases = []
+    for raw_case in raw_cases:
+        steps = []
+        for raw_step in raw_case.get("steps", []):
+            asserts = [AssertResult(**raw_assert) for raw_assert in raw_step.get("asserts", [])]
+            raw_step = {**raw_step, "asserts": asserts}
+            steps.append(StepResult(**raw_step))
+        raw_case = {**raw_case, "steps": steps}
+        cases.append(CaseResult(**raw_case))
+    return cases
 
 
 # ──────────────────────────────────────────────
@@ -433,11 +466,32 @@ class LogParser:
 # ──────────────────────────────────────────────
 
 class HtmlReportRenderer:
+    def _mask_value(self, key: str, value):
+        if key.lower() in SENSITIVE_KEYS:
+            return "****"
+        return value
+
+    def _sanitize_mapping(self, data: dict) -> dict:
+        return {k: self._mask_value(str(k), v) for k, v in data.items()}
+
+    def _sanitize_url(self, url: str) -> str:
+        if not url:
+            return url
+        try:
+            parts = urlsplit(url)
+            query = []
+            for key, value in parse_qsl(parts.query, keep_blank_values=True):
+                query.append((key, "****" if key.lower() in SENSITIVE_KEYS else value))
+            return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
+        except Exception:
+            return url
+
     def render(self, cases: list, output_path: Path):
         total = len(cases)
         passed = sum(1 for c in cases if c.passed)
         failed = total - passed
         generated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        css_path = output_path.parent / LATEST_REPORT_CSS_NAME
 
         html = f"""<!DOCTYPE html>
 <html lang="zh-CN">
@@ -445,7 +499,7 @@ class HtmlReportRenderer:
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>神桌接口自动化</title>
-<style>{self._css()}</style>
+<link rel="stylesheet" href="{LATEST_REPORT_CSS_NAME}">
 </head>
 <body>
 <div class="container">
@@ -461,29 +515,36 @@ class HtmlReportRenderer:
   </div>
   {"".join(self._render_case(c, i) for i, c in enumerate(cases))}
 </div>
-<script>{self._js()}</script>
 </body>
-</html>"""
+        </html>"""
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(html, encoding="utf-8")
+        css_path.write_text(self._css(), encoding="utf-8")
+        latest_path = output_path.parent / LATEST_REPORT_NAME
+        if output_path != latest_path:
+            shutil.copyfile(output_path, latest_path)
         print(f"✅ 报告已生成: {output_path}")
+        print(f"✅ 报告样式已更新: {css_path}")
+        if output_path != latest_path:
+            print(f"✅ 最新报告已更新: {latest_path}")
 
     def _render_case(self, case: CaseResult, idx: int) -> str:
         cls = "pass" if case.passed else "fail"
         icon = "✅ 通过" if case.passed else "❌ 失败"
         steps_html = "".join(self._render_step(s, i) for i, s in enumerate(case.steps))
         yaml_tag = f'<span class="yaml-tag">{case.yaml_file}</span>' if case.yaml_file else ""
+        open_attr = " open" if not case.passed else ""
         return f"""
-  <div class="case-card {cls}">
-    <div class="case-header" onclick="toggle('case-{idx}','arrow-{idx}')">
+  <details class="case-card {cls}"{open_attr}>
+    <summary class="case-header">
       <span class="badge {cls}">{icon}</span>
       <span class="case-name">{case.name}</span>
       {yaml_tag}
       <span class="case-meta">{case.passed_steps}/{case.total_steps} 步骤通过 · {case.start_time}</span>
-      <span class="arrow" id="arrow-{idx}">▼</span>
-    </div>
-    <div class="case-body" id="case-{idx}">{steps_html}</div>
-  </div>"""
+      <span class="arrow">▼</span>
+    </summary>
+    <div class="case-body">{steps_html}</div>
+  </details>"""
 
     def _render_step(self, step: StepResult, idx: int) -> str:
         cls = "pass" if step.passed else "fail"
@@ -511,20 +572,22 @@ class HtmlReportRenderer:
             )
 
         # 失败时详情默认展开，通过时收起
-        detail_open = "open" if not step.passed else ""
+        detail_open = " open" if not step.passed else ""
         detail_html = ""
         if detail_parts:
-            detail_id = f"detail-{id(step)}"
             detail_html = f"""
-          <div class="detail-toggle" onclick="toggleDetail('{detail_id}')">
-            <span class="detail-label">{'▶ 查看详情' if step.passed else '▼ 请求详情'}</span>
-          </div>
-          <div class="detail-body {detail_open}" id="{detail_id}">
+          <details class="detail-panel"{detail_open}>
+            <summary class="detail-toggle">
+              <span class="detail-label">{'查看详情' if step.passed else '请求详情'}</span>
+            </summary>
+            <div class="detail-body">
             {"".join(detail_parts)}
-          </div>"""
+            </div>
+          </details>"""
 
         sc_cls = f"sc-{str(step.status_code)[0]}" if step.status_code else "sc-0"
         method_cls = step.method.lower() if step.method else ""
+        safe_url = self._sanitize_url(step.full_url or step.url)
 
         return f"""
       <div class="step {cls}">
@@ -536,7 +599,7 @@ class HtmlReportRenderer:
         <div class="step-body">
           <div class="url-bar">
             <span class="url-label">URL</span>
-            <span class="url-value">{step.full_url or step.url}</span>
+            <span class="url-value">{safe_url}</span>
             <span class="status-code {sc_cls}">{step.status_code or '-'}</span>
           </div>
           {asserts_html}
@@ -577,9 +640,10 @@ class HtmlReportRenderer:
     def _kv_table(self, data: dict, title: str) -> str:
         if not data:
             return ""
+        safe_data = self._sanitize_mapping(data)
         rows = "".join(
             f"<tr><td class='key'>{k}</td><td class='val'>{v}</td></tr>"
-            for k, v in data.items()
+            for k, v in safe_data.items()
         )
         return f'<div class="section-title">{title}</div><table class="kv-table"><tbody>{rows}</tbody></table>'
 
@@ -607,16 +671,16 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 .case-card.fail { border-left: 4px solid #ef4444; }
 .case-card.pass { border-left: 4px solid #22c55e; }
 .case-header { display: flex; align-items: center; gap: 12px; padding: 16px 20px;
-               cursor: pointer; user-select: none; }
+               cursor: pointer; user-select: none; list-style: none; }
+.case-header::-webkit-details-marker { display: none; }
 .case-header:hover { background: #fafafa; }
 .case-name { font-weight: 600; flex: 1; }
 .case-meta { font-size: 12px; color: #999; }
 .yaml-tag { font-size: 11px; background: #e0f2fe; color: #0369a1;
             padding: 2px 8px; border-radius: 10px; }
 .arrow { color: #aaa; transition: transform .2s; font-size: 12px; }
-.arrow.open { transform: rotate(180deg); }
-.case-body { padding: 0 20px 16px; display: none; }
-.case-body.open { display: block; }
+.case-card[open] .arrow { transform: rotate(180deg); }
+.case-body { padding: 0 20px 16px; }
 .badge { padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
 .badge.pass { background: #dcfce7; color: #166534; }
 .badge.fail { background: #fee2e2; color: #991b1b; }
@@ -676,35 +740,15 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
               font-size: 12px; overflow-x: auto; white-space: pre-wrap;
               word-break: break-all; margin-top: 4px; line-height: 1.6; }
 /* 详情折叠 */
-.detail-toggle { margin-top: 12px; cursor: pointer; display: inline-flex;
-                 align-items: center; gap: 4px; }
+.detail-panel { margin-top: 12px; }
+.detail-toggle { cursor: pointer; display: inline-flex; align-items: center;
+                 gap: 4px; list-style: none; }
+.detail-toggle::-webkit-details-marker { display: none; }
 .detail-label { font-size: 12px; color: #64748b; padding: 3px 10px;
                 border: 1px solid #e2e8f0; border-radius: 20px;
                 background: #f8fafc; transition: background .15s; }
 .detail-toggle:hover .detail-label { background: #e2e8f0; color: #334155; }
-.detail-body { display: none; margin-top: 8px; }
-.detail-body.open { display: block; }
-"""
-
-    def _js(self) -> str:
-        return """
-function toggle(bodyId, arrowId) {
-  document.getElementById(bodyId).classList.toggle('open');
-  document.getElementById(arrowId).classList.toggle('open');
-}
-function toggleDetail(id) {
-  const el = document.getElementById(id);
-  const toggle = el.previousElementSibling.querySelector('.detail-label');
-  el.classList.toggle('open');
-  toggle.textContent = el.classList.contains('open') ? '▼ 请求详情' : '▶ 查看详情';
-}
-// 失败用例默认展开
-document.querySelectorAll('.case-card.fail').forEach(card => {
-  const body = card.querySelector('.case-body');
-  const arrow = card.querySelector('.arrow');
-  if (body) body.classList.add('open');
-  if (arrow) arrow.classList.add('open');
-});
+.detail-body { margin-top: 8px; }
 """
 
 

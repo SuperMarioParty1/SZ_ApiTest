@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 YAML 用例加载工具
 负责读取 testcases 目录下的 yaml 用例文件，并转换为 httprunner 可执行格式

@@ -73,6 +73,9 @@ python3 run.py --path testcases/theme
 
 # 运行全部用例
 python3 run.py
+
+# CI/Jenkins 环境运行（不自动打开报告）
+python3 run.py --path testcases --no-open
 ```
 
 运行完成后自动生成 HTML 报告并打开浏览器。

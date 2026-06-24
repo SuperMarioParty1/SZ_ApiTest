@@ -2,9 +2,9 @@
 # 运行命令：python run.py --path testcases/island/test_animation_list_pytest.py
 import time
 import pytest
-import requests
 
 from utils.env_loader import ENV_CONFIG, get_base_url
+from utils.http_client import get_with_retry
 
 BASE_URL = get_base_url(2102)
 
@@ -57,7 +57,7 @@ EXPECTED_NAMES = [
 def animation_list_response():
     """发送请求，整个模块复用同一个响应"""
     params = {**PARAMS, "timestamp": int(time.time())}
-    resp = requests.get(f"{BASE_URL}/island/animation-list", params=params)
+    resp = get_with_retry(f"{BASE_URL}/island/animation-list", params=params)
     return resp
 
 
@@ -79,7 +79,7 @@ def lang_response(request):
     """每种语言单独发一次请求，fixture 自动参数化"""
     lang_code, lang_name = request.param
     params = {**PARAMS, "lang": lang_code, "timestamp": int(time.time())}
-    resp = requests.get(f"{BASE_URL}/island/animation-list", params=params)
+    resp = get_with_retry(f"{BASE_URL}/island/animation-list", params=params)
     # 把语言信息挂在响应上，方便测试函数取用
     resp._lang_code = lang_code
     resp._lang_name = lang_name

@@ -5,7 +5,6 @@ config:
     UUID1: 'sssssfhhh'
     version: "3.2.1"
     super_token: ${ENV(SUPER_TOKEN)}
-    lang: zh_CN
   parameters:
     lang: ["zh_CN", "zh-Hant_CN", "en_CN", "ja_CN", "es_CN"]
 

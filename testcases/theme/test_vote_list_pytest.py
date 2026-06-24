@@ -2,8 +2,8 @@
 # 运行命令：python run.py --path testcases/theme/test_vote_list_pytest.py
 import time
 import pytest
-import requests
 from utils.env_loader import ENV_CONFIG, get_base_url
+from utils.http_client import get_with_retry
 
 BASE_URL = get_base_url(2102)
 
@@ -31,7 +31,7 @@ EXPECTED_DATA = ["ACGN", "Game", "Hip Hop", "Mad", "Motivation", "Car", "Cyberpu
 def vote_list_response():
     """发送请求，整个模块复用同一个响应"""
     params = {**PARAMS, "timestamp": int(time.time())}
-    resp = requests.get(f"{BASE_URL}/theme/vote-list", params=params)
+    resp = get_with_retry(f"{BASE_URL}/theme/vote-list", params=params)
     return resp
 
 

@@ -1,7 +1,10 @@
+from __future__ import annotations
+
 """
 pytest conftest.py
 全局 fixture 配置 + 自定义 HTML 报告 hook
 """
+import os
 import pytest
 from datetime import datetime
 from pathlib import Path
@@ -10,6 +13,8 @@ from utils.env_loader import ENV_CONFIG
 
 PROJECT_ROOT = Path(__file__).parent.parent
 REPORTS_DIR = PROJECT_ROOT / "reports"
+LOGS_DIR = PROJECT_ROOT / "logs"
+NO_OPEN_ENV_KEY = "NO_OPEN_REPORT"
 
 # 用于在 item 上存储请求数据的 key
 STEP_DATA_KEY = pytest.StashKey()
@@ -64,7 +69,40 @@ def pytest_configure(config):
 
 class _CustomReportPlugin:
     def __init__(self):
-        self.cases = {}   # class_name -> CaseResult
+        self.cases = {}   # case_key -> CaseResult
+        self.processed_logs = set(LOGS_DIR.glob("*.run.log"))
+
+    def _is_httprunner_case(self, file_name: str) -> bool:
+        return file_name.endswith("_test") or file_name.endswith("_hrun")
+
+    def _find_yaml_for_py_case(self, file_path: Path) -> Path | None:
+        for suffix in ("_test", "_hrun"):
+            if file_path.stem.endswith(suffix):
+                yaml_path = file_path.with_name(f"{file_path.stem[:-len(suffix)]}.yaml")
+                if yaml_path.exists():
+                    return yaml_path
+        return None
+
+    def _get_new_run_log(self) -> Path | None:
+        log_files = sorted(LOGS_DIR.glob("*.run.log"), key=lambda path: path.stat().st_mtime)
+        for log_file in log_files:
+            if log_file not in self.processed_logs:
+                self.processed_logs.add(log_file)
+                return log_file
+        return None
+
+    def _build_case_from_run_log(self, file_path: Path, case_name: str):
+        from utils.report_generator import CaseResult, LogParser
+
+        log_file = self._get_new_run_log()
+        if not log_file:
+            return None
+
+        yaml_path = self._find_yaml_for_py_case(file_path)
+        parsed_case = LogParser().parse(log_file, yaml_path=yaml_path)
+        parsed_case.name = case_name
+        parsed_case.log_file = log_file.name
+        return parsed_case
 
     def pytest_runtest_logreport(self, report):
         if report.when != "call":
@@ -77,8 +115,11 @@ class _CustomReportPlugin:
 
         # 解析 class 名和函数名
         parts = nodeid.split("::")
+        file_path = Path(parts[0]) if parts else Path(nodeid)
+        file_name = file_path.stem
         class_name = parts[-2] if len(parts) >= 3 else parts[0]
         func_name = parts[-1] if parts else nodeid
+        case_name = f"{file_name}::{class_name}"
         # pytest 对非 ASCII 参数做了 unicode 转义，还原成可读中文
         try:
             func_name = func_name.encode('raw_unicode_escape').decode('unicode_escape')
@@ -96,13 +137,26 @@ class _CustomReportPlugin:
             known_langs = ["zh-Hant_CN", "zh_CN", "en_CN", "ja_CN", "es_CN"]
             matched_lang = next((lang for lang in known_langs if param_str == lang or param_str.startswith(lang + "-")), None)
             if matched_lang:
-                class_name = f"{class_name}[{matched_lang}]"
+                case_name = f"{file_name}::{class_name}[{matched_lang}]"
                 # 去掉 func_name 里的 fixture 参数部分，保留后面的 parametrize 参数
                 func_name = re.sub(
                     r'^([^[]+)\[' + re.escape(matched_lang) + r'-?([^\]]*)\](.*)$',
                     lambda m: m.group(1) + (f"[{m.group(2)}]" if m.group(2) else "") + m.group(3),
                     func_name
                 )
+
+        if not step_data and self._is_httprunner_case(file_name):
+            parsed_case = self._build_case_from_run_log(file_path, case_name)
+            if parsed_case:
+                if case_name not in self.cases:
+                    self.cases[case_name] = parsed_case
+                else:
+                    self.cases[case_name].steps.extend(parsed_case.steps)
+                    if parsed_case.yaml_file:
+                        self.cases[case_name].yaml_file = parsed_case.yaml_file
+                    if parsed_case.log_file:
+                        self.cases[case_name].log_file = parsed_case.log_file
+                return
 
         # 构建断言列表
         asserts = []
@@ -139,28 +193,30 @@ class _CustomReportPlugin:
             duration_ms=round(report.duration * 1000, 2),
         )
 
-        if class_name not in self.cases:
-            self.cases[class_name] = CaseResult(
-                name=class_name,
+        if case_name not in self.cases:
+            self.cases[case_name] = CaseResult(
+                name=case_name,
                 log_file="",
                 start_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             )
-        self.cases[class_name].steps.append(step)
+        self.cases[case_name].steps.append(step)
 
     def pytest_sessionfinish(self, session, exitstatus):
         if not self.cases:
             return
 
-        from utils.report_generator import HtmlReportRenderer
+        from utils.report_generator import HtmlReportRenderer, dump_case_results, PYTEST_CASES_JSON_NAME
 
         REPORTS_DIR.mkdir(exist_ok=True)
+        dump_case_results(list(self.cases.values()), REPORTS_DIR / PYTEST_CASES_JSON_NAME)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         report_path = REPORTS_DIR / f"report_{timestamp}.html"
 
         HtmlReportRenderer().render(list(self.cases.values()), report_path)
 
-        import subprocess
-        subprocess.run(["open", str(report_path)])
+        if os.getenv(NO_OPEN_ENV_KEY) != "1":
+            import subprocess
+            subprocess.run(["open", str(report_path)])
 
 
 # ──────────────────────────────────────────────
